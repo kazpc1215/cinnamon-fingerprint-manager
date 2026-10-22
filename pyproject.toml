@@ -25,6 +25,7 @@ classifiers = [
 Homepage = "https://github.com/kazpc1215/cinnamon-fingerprint-manager"
 Repository = "https://github.com/kazpc1215/cinnamon-fingerprint-manager"
 Issues = "https://github.com/kazpc1215/cinnamon-fingerprint-manager/issues"
+Changelog = "https://github.com/kazpc1215/cinnamon-fingerprint-manager/blob/main/CHANGELOG.md"
 
 [project.scripts]
 cinnamon-fingerprint-manager = "cinnamon_fingerprint_manager.__main__:main"

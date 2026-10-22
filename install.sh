@@ -34,6 +34,16 @@ case ${1:-} in
 esac
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# GUI はシステム Python の gi を使うため、venv が有効な環境でもそれを避ける
+python_bin=${PYTHON_BIN:-/usr/bin/python3}
+if [[ ! -x $python_bin ]]; then
+    python_bin=$(command -v python3 || true)
+fi
+if [[ -z $python_bin ]]; then
+    echo "エラー: python3 が見つかりません。" >&2
+    exit 1
+fi
+
 data_home=${XDG_DATA_HOME:-$HOME/.local/share}
 dest_dir="$data_home/fingerprint-manager"
 apps_dir="$data_home/applications"
@@ -42,13 +52,8 @@ package_dir="$dest_dir/cinnamon_fingerprint_manager"
 icon_dir="$data_home/icons/hicolor/scalable/apps"
 icon_file="$icon_dir/fingerprint-manager.svg"
 
-if ! command -v python3 >/dev/null 2>&1; then
-    echo "エラー: python3 が見つかりません。" >&2
-    exit 1
-fi
-
-if ! python3 -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
-    echo "エラー: Python 3.10 以上が必要です。" >&2
+if ! "$python_bin" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)'; then
+    echo "エラー: Python 3.10 以上が必要です: $python_bin" >&2
     exit 1
 fi
 
@@ -58,8 +63,8 @@ if ! command -v fprintd-list >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! python3 -c 'import gi; gi.require_version("Gtk", "3.0"); from gi.repository import Gtk' 2>/dev/null; then
-    echo "エラー: GTK3 (python3-gi / gir1.2-gtk-3.0) が見つかりません。" >&2
+if ! "$python_bin" -c 'import gi; gi.require_version("Gtk", "3.0"); from gi.repository import Gtk' 2>/dev/null; then
+    echo "エラー: GTK3 (python3-gi / gir1.2-gtk-3.0) が見つかりません: $python_bin" >&2
     echo "  sudo apt install python3-gi gir1.2-gtk-3.0" >&2
     exit 1
 fi
@@ -76,7 +81,7 @@ rm -rf "$package_dir"
 mv "$tmp_dir/cinnamon_fingerprint_manager" "$package_dir"
 rm -f "$dest_dir/fingerprint_manager.py"  # 旧バージョンの単一ファイル版
 
-PYTHONPATH="$dest_dir" python3 -c 'import cinnamon_fingerprint_manager' 2>/dev/null || {
+PYTHONPATH="$dest_dir" "$python_bin" -c 'import cinnamon_fingerprint_manager' 2>/dev/null || {
     echo "エラー: インストールしたパッケージを読み込めません。" >&2
     exit 1
 }
@@ -95,6 +100,7 @@ quote_exec_arg() {
 }
 
 exec_path=$(quote_exec_arg "$dest_dir")
+python_exec=$(quote_exec_arg "$python_bin")
 
 cat > "$desktop_file" <<EOF
 [Desktop Entry]
@@ -106,8 +112,8 @@ GenericName=Fingerprint Management
 GenericName[ja]=指紋の管理
 Comment=Enroll, test and delete fingerprints
 Comment[ja]=指紋の登録・照合テスト・削除を行います
-Exec=env PYTHONPATH=$exec_path python3 -m cinnamon_fingerprint_manager
-TryExec=python3
+Exec=env PYTHONPATH=$exec_path $python_exec -m cinnamon_fingerprint_manager
+TryExec=$python_bin
 Icon=fingerprint-manager
 Terminal=false
 Categories=Settings;

@@ -124,7 +124,25 @@ sudo pam-auth-update --disable fprintd
 
 - 複数の指紋デバイスがある場合、`fprintd-list` が返す最初の 1 台のみを表示します
 - デバイス名や指の内部名は `fprintd` の出力（英語）を基にしています
+- UI は日本語を基本としており、翻訳カタログは同梱していません
 - 登録・削除には polkit エージェント（Cinnamon 標準のもの）が必要です
+
+困ったときは [トラブルシューティング](docs/troubleshooting.md) を参照してください。
+
+## ログ
+
+`CFM_DEBUG=1` を設定すると、fprintd の実行や失敗の詳細を標準エラーに出力します。
+
+```bash
+CFM_DEBUG=1 gtk-launch fingerprint-manager
+```
+
+## ドキュメント
+
+- [トラブルシューティング](docs/troubleshooting.md)
+- [国際化とアクセシビリティ](docs/i18n-accessibility.md)
+- [変更履歴](CHANGELOG.md)
+- [コントリビュート](CONTRIBUTING.md)
 
 ## 開発
 
@@ -149,7 +167,11 @@ PYTHONPATH=src python3 -m cinnamon_fingerprint_manager
 xvfb-run -a env PYTHONPATH=src python3 tests/gui_smoke.py
 ```
 
-CI（GitHub Actions）は **lint / test / GTK UI smoke** の 3 ジョブに分かれています。GTK UI smoke では Xvfb 上でウィンドウを生成し、ウィジェットの描画まで確認します。
+CI（GitHub Actions）は **lint / Python 3.10–3.12 のテスト / パッケージビルド / GTK UI・インストール検証** に分かれています。GUI ジョブでは Xvfb 上でウィンドウを生成し、fake fprintd を使ったテスト、ShellCheck、desktop entry の検証、インストール／アンインストールまで確認します。
+
+開発の進め方、テストの実行方法、翻訳・アクセシビリティの方針は
+[CONTRIBUTING.md](CONTRIBUTING.md) と
+[docs/i18n-accessibility.md](docs/i18n-accessibility.md) を参照してください。
 
 ## ライセンス
 

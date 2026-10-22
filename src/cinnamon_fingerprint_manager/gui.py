@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import subprocess
 import threading
@@ -30,6 +31,7 @@ APP_TITLE = "指紋マネージャー"
 APP_ID = "io.github.kazpc1215.FingerprintManager"
 
 USER = current_user()
+logger = logging.getLogger(__name__)
 
 
 def command_env() -> dict[str, str]:
@@ -113,6 +115,10 @@ class FingerprintManager(Gtk.Window):
         self.cancel_button = Gtk.Button(label="中止")
         self.cancel_button.connect("clicked", self.on_cancel_clicked)
         self.cancel_button.set_no_show_all(True)
+        self.add_button.set_tooltip_text("指紋を登録します")
+        self.refresh_button.set_tooltip_text("登録済みの指紋を再取得します")
+        self.cancel_button.set_tooltip_text("実行中の処理を中止します")
+        self.listbox.get_accessible().set_name("登録済みの指紋一覧")
         buttons.pack_start(self.add_button, False, False, 0)
         buttons.pack_start(self.refresh_button, False, False, 0)
         buttons.pack_end(self.cancel_button, False, False, 0)
@@ -136,6 +142,7 @@ class FingerprintManager(Gtk.Window):
         self.output.set_monospace(True)
         self.output.set_left_margin(6)
         self.output.set_right_margin(6)
+        self.output.get_accessible().set_name("fprintd の出力")
         out_scroll.add(self.output)
         out_frame = Gtk.Frame()
         out_frame.set_border_width(12)
@@ -179,6 +186,7 @@ class FingerprintManager(Gtk.Window):
         self.add_button.set_sensitive(False)
         self.list_generation += 1
         generation = self.list_generation
+        logger.debug("Fetching fingerprints for %s", USER)
         try:
             proc = subprocess.Popen(
                 build_list_command(USER),
@@ -190,6 +198,7 @@ class FingerprintManager(Gtk.Window):
                 env=command_env(),
             )
         except OSError as exc:
+            logger.exception("Could not start fprintd-list")
             self.refreshing = False
             self.refresh_button.set_sensitive(True)
             self._set_device_error(
@@ -212,6 +221,7 @@ class FingerprintManager(Gtk.Window):
                 proc.kill()
                 output, _ = proc.communicate()
         except (OSError, ValueError) as exc:
+            logger.exception("Failed while reading fprintd-list output")
             output = str(exc)
         finally:
             GLib.idle_add(
@@ -243,6 +253,11 @@ class FingerprintManager(Gtk.Window):
 
         parsed = parse_list_output(output)
         if not parsed.found:
+            logger.debug(
+                "No device in fprintd-list output (exit %s): %s",
+                returncode,
+                summarize_output(output),
+            )
             if returncode != 0:
                 detail = summarize_output(output)
                 message = "fprintd から一覧を取得できませんでした。"
@@ -312,11 +327,13 @@ class FingerprintManager(Gtk.Window):
         box.pack_start(text, True, True, 0)
 
         verify = Gtk.Button(label="テスト")
+        verify.set_tooltip_text(f"{finger_label(finger)} で照合テスト")
         verify.connect(
             "clicked",
             lambda *_: self.run_command(build_verify_command(finger, USER), "照合テスト", "verify"),
         )
         delete = Gtk.Button(label="削除")
+        delete.set_tooltip_text(f"{finger_label(finger)} の登録を削除")
         delete.get_style_context().add_class("destructive-action")
         delete.connect("clicked", lambda *_: self.on_delete_clicked(finger, title.get_text()))
         box.pack_end(delete, False, False, 0)
@@ -460,6 +477,7 @@ class FingerprintManager(Gtk.Window):
         self.cancel_button.set_sensitive(True)
         for row in self.listbox.get_children():
             row.set_sensitive(False)
+        logger.debug("Running fprintd command: %s", " ".join(args))
 
         try:
             self.proc = subprocess.Popen(
@@ -473,6 +491,7 @@ class FingerprintManager(Gtk.Window):
                 bufsize=1,
             )
         except OSError as exc:
+            logger.exception("Could not start fprintd command")
             self._finish(-1, f"fprintd を実行できません: {exc}")
             return
 
@@ -504,6 +523,7 @@ class FingerprintManager(Gtk.Window):
             self.status_label.set_text("読み取りが不十分でした。もう一度指を置いてください。")
 
     def _finish(self, returncode, error):
+        logger.debug("fprintd command finished with exit code %s", returncode)
         self.proc = None
         self.cancel_button.hide()
         self.add_button.set_sensitive(True)
@@ -551,4 +571,9 @@ class FingerprintManagerApp(Gtk.Application):
 
 
 def main():
+    logging.basicConfig(
+        level=logging.DEBUG if os.environ.get("CFM_DEBUG") else logging.WARNING,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+    logger.debug("Starting fingerprint manager")
     return FingerprintManagerApp().run(None)
