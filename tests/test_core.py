@@ -44,6 +44,27 @@ Using device /net/reactivated/Fprint/Device/0
 User nobody has no fingers enrolled for AuthenTec AES2660.
 """
 
+SAMPLE_MULTI_DEVICE = """found 2 devices
+Device at /net/reactivated/Fprint/Device/0
+Using device /net/reactivated/Fprint/Device/0
+Fingerprints for user kisoya on Sensor A (swipe):
+ - #0: right-thumb
+Device at /net/reactivated/Fprint/Device/1
+Using device /net/reactivated/Fprint/Device/1
+Fingerprints for user kisoya on Sensor B (press):
+ - #0: left-thumb
+"""
+
+SAMPLE_NO_FINGERS_FIRST_DEVICE = """found 2 devices
+Device at /net/reactivated/Fprint/Device/0
+Using device /net/reactivated/Fprint/Device/0
+User kisoya has no fingers enrolled for Sensor A.
+Device at /net/reactivated/Fprint/Device/1
+Using device /net/reactivated/Fprint/Device/1
+Fingerprints for user kisoya on Sensor B (press):
+ - #0: left-thumb
+"""
+
 
 class TestParseListOutput:
     def test_parses_device_scan_type_and_fingers(self):
@@ -75,6 +96,19 @@ class TestParseListOutput:
         parsed = parse_list_output(SAMPLE_NO_FINGERS)
         assert parsed.found is True
         assert parsed.device == "AuthenTec AES2660"
+        assert parsed.scan_type is None
+        assert parsed.fingers == []
+
+    def test_multiple_devices_only_uses_the_first_section(self):
+        parsed = parse_list_output(SAMPLE_MULTI_DEVICE)
+        assert parsed.device == "Sensor A"
+        assert parsed.scan_type == "swipe"
+        assert parsed.fingers == ["right-thumb"]
+
+    def test_first_device_without_fingers_is_not_replaced_by_second(self):
+        parsed = parse_list_output(SAMPLE_NO_FINGERS_FIRST_DEVICE)
+        assert parsed.found is True
+        assert parsed.device == "Sensor A"
         assert parsed.scan_type is None
         assert parsed.fingers == []
 

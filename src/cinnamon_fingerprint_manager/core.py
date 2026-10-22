@@ -34,9 +34,11 @@ SCAN_TYPE_LABEL: dict[str, str] = {
 }
 
 _FINGER_LINE = re.compile(r"^\s*-\s*#\d+:\s*(\S+)\s*$", re.MULTILINE)
-_DEVICE_LINE = re.compile(r"\bon (.+?)(?: \((.+?)\))?:\s*$", re.MULTILINE)
-_NO_FINGERS_LINE = re.compile(
-    r"^\s*User\s+.+?\s+has no fingers enrolled(?: for (.+?))?\.\s*$",
+_SECTION_LINE = re.compile(
+    r"^\s*(?:"
+    r"Fingerprints for user .+? on (?P<device>.+?)(?: \((?P<scan_type>.+?)\))?:"
+    r"|User .+? has no fingers enrolled(?: for (?P<no_device>.+?))?\."
+    r")\s*$",
     re.MULTILINE,
 )
 
@@ -61,23 +63,28 @@ class Result(NamedTuple):
 
 
 def parse_list_output(text: str) -> ListResult:
-    """Extract the device name, scan type and enrolled fingers."""
-    match = _DEVICE_LINE.search(text)
-    if match:
-        device = match.group(1).strip()
-        scan_type = match.group(2).strip() if match.group(2) else None
-        fingers = _FINGER_LINE.findall(text)
-        return ListResult(device, scan_type, fingers)
+    """Extract the first device and its enrolled fingers.
 
-    # fprintd prints a different line when the device exists but the user has
-    # not enrolled any finger yet:
-    #   User nobody has no fingers enrolled for AuthenTec AES2660.
-    no_fingers = _NO_FINGERS_LINE.search(text)
-    if no_fingers:
-        device = (no_fingers.group(1) or "").strip() or None
-        return ListResult(device, None, [])
+    ``fprintd-list`` may print one section per device.  The GUI only manages
+    the default device, so ignore subsequent device sections instead of
+    merging their fingerprints into the first one.
+    """
+    sections = list(_SECTION_LINE.finditer(text))
+    if not sections:
+        return ListResult(None, None, [])
 
-    return ListResult(None, None, [])
+    first = sections[0]
+    device = (first.group("device") or first.group("no_device") or "").strip() or None
+    scan_type = first.group("scan_type") or None
+
+    if first.group("device"):
+        end = sections[1].start() if len(sections) > 1 else len(text)
+        fingers = _FINGER_LINE.findall(text[first.end() : end])
+    else:
+        # "User ... has no fingers enrolled for <device>." carries no scan type
+        fingers = []
+
+    return ListResult(device, scan_type, fingers)
 
 
 def device_title(device: str, scan_type: str | None = None) -> str:
