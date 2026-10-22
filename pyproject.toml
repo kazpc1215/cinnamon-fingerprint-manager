@@ -1,24 +1,30 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
 name = "cinnamon-fingerprint-manager"
-version = "1.1.0"
+dynamic = ["version"]
 description = "GTK3 GUI to enroll, verify and delete fingerprints with fprintd on Linux Mint / Cinnamon"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "kazpc1215" }]
 keywords = ["fingerprint", "fprintd", "gtk3", "cinnamon", "linux-mint"]
 classifiers = [
     "Environment :: X11 Applications :: GTK",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
     "Topic :: System :: Systems Administration",
 ]
+
+[project.urls]
+Homepage = "https://github.com/kazpc1215/cinnamon-fingerprint-manager"
+Repository = "https://github.com/kazpc1215/cinnamon-fingerprint-manager"
+Issues = "https://github.com/kazpc1215/cinnamon-fingerprint-manager/issues"
 
 [project.scripts]
 cinnamon-fingerprint-manager = "cinnamon_fingerprint_manager.__main__:main"
@@ -31,6 +37,9 @@ dev = [
 
 [tool.uv]
 package = true
+
+[tool.hatch.version]
+path = "src/cinnamon_fingerprint_manager/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cinnamon_fingerprint_manager"]

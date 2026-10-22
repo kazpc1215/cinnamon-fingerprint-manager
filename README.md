@@ -64,6 +64,16 @@ cd cinnamon-fingerprint-manager
 ./uninstall.sh
 ```
 
+### pip / venv でインストールする場合の注意
+
+`pip install .` で Python パッケージ自体はインストールできますが、次の点に注意してください。
+
+- PyGObject (`gi`) と GTK3 はシステムパッケージ（`python3-gi` / `gir1.2-gtk-3.0`）であり、pip の依存関係には含まれません
+- 通常の venv や `pipx` / `uv tool install` ではシステムの `gi` を参照できず、起動時に「GTK3 / PyGObject を読み込めませんでした」と表示されます
+- `fprintd` 本体も pip ではインストールされません
+
+そのため、通常は `./install.sh` を使ってください。どうしても pip を使う場合は、システム Python の環境に入れるか、`python3 -m venv --system-site-packages` で作成した venv を使ってください。
+
 ## 使い方
 
 アプリメニューで「指紋」と検索するか、ターミナルから起動します。
