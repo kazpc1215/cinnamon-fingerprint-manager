@@ -110,7 +110,7 @@ Exec=env PYTHONPATH=$exec_path python3 -m cinnamon_fingerprint_manager
 TryExec=python3
 Icon=fingerprint-manager
 Terminal=false
-Categories=Settings;System;
+Categories=Settings;
 Keywords=fingerprint;fprint;biometric;指紋;生体認証;
 StartupNotify=true
 EOF

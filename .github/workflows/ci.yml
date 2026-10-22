@@ -16,6 +16,7 @@ jobs:
   lint:
     name: Lint
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
@@ -29,28 +30,66 @@ jobs:
         run: uv run ruff format --check .
 
   test:
-    name: Test
+    name: Test (Python ${{ matrix.python-version }})
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.3.2
         with:
           enable-cache: true
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --frozen --python ${{ matrix.python-version }}
       - name: Pytest
         run: uv run pytest -q
 
-  gui:
-    name: GTK UI smoke
+  build:
+    name: Build distributions
     runs-on: ubuntu-24.04
-    # apt のミラーが応答しない場合に備えて打ち切る
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Install GTK and Xvfb
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+      - name: Build sdist and wheel
+        run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  gui:
+    name: GTK UI and install checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install GTK, pytest, Xvfb and validation tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 xvfb
+          sudo apt-get install -y \
+            desktop-file-utils fprintd gir1.2-gtk-3.0 python3-gi \
+            python3-pytest python3-pytest-cov shellcheck xvfb
+      - name: ShellCheck
+        run: shellcheck install.sh uninstall.sh
       - name: Build and draw the window
         run: xvfb-run -a env PYTHONPATH=src /usr/bin/python3 tests/gui_smoke.py
+      - name: GUI and core tests with coverage
+        run: >-
+          xvfb-run -a env PYTHONPATH=src /usr/bin/python3 -m pytest -q
+          --cov=cinnamon_fingerprint_manager --cov-report=term-missing
+          --cov-fail-under=60 tests/
+      - name: Install, validate the desktop entry, then uninstall
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/share
+        run: |
+          ./install.sh
+          desktop-file-validate \
+            "$XDG_DATA_HOME/applications/fingerprint-manager.desktop"
+          ./uninstall.sh
