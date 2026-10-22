@@ -10,7 +10,7 @@ import threading
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Pango  # noqa: E402
+from gi.repository import Gio, GLib, Gtk, Pango  # noqa: E402
 
 from .core import (  # noqa: E402
     available_fingers,
@@ -27,6 +27,7 @@ from .core import (  # noqa: E402
 )
 
 APP_TITLE = "指紋マネージャー"
+APP_ID = "io.github.kazpc1215.FingerprintManager"
 
 USER = current_user()
 
@@ -39,9 +40,12 @@ def command_env() -> dict[str, str]:
 
 
 class FingerprintManager(Gtk.Window):
-    def __init__(self):
+    def __init__(self, application=None):
         super().__init__(title=APP_TITLE)
+        if application is not None:
+            self.set_application(application)
         self.set_default_size(560, 560)
+        self.set_icon_name("dialog-password")
         self.proc = None
         self.last_lines: list[str] = []
         self.current_action: str | None = None
@@ -406,8 +410,6 @@ class FingerprintManager(Gtk.Window):
     def on_destroy(self, _widget):
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
-        if Gtk.main_level() > 0:
-            Gtk.main_quit()
 
     # ---------- コマンド実行 ----------
     def run_command(self, args, description, action=None):
@@ -496,9 +498,18 @@ class FingerprintManager(Gtk.Window):
         dialog.destroy()
 
 
+class FingerprintManagerApp(Gtk.Application):
+    def __init__(self):
+        super().__init__(application_id=APP_ID, flags=Gio.ApplicationFlags.FLAGS_NONE)
+
+    def do_activate(self):
+        win = self.props.active_window
+        if win is None:
+            win = FingerprintManager(application=self)
+        win.show_all()
+        win.cancel_button.hide()
+        win.present()
+
+
 def main():
-    win = FingerprintManager()
-    win.connect("delete-event", Gtk.main_quit)
-    win.show_all()
-    win.cancel_button.hide()
-    Gtk.main()
+    return FingerprintManagerApp().run(None)
