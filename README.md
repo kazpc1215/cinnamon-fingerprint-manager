@@ -4,6 +4,8 @@ Linux Mint / Cinnamon には指紋認証の設定 GUI がありません。こ�
 
 追加のランタイム依存はなく、Linux Mint に標準で入っている Python 3 + GTK3 + fprintd だけで動作します。
 
+![指紋マネージャーの画面](docs/screenshot.png)
+
 ## 機能
 
 - 登録済みの指紋を一覧表示（デバイス名・スキャン方式も表示）

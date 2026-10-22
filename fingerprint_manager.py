@@ -7,12 +7,14 @@
 import os
 import re
 import subprocess
+import sys
 import threading
 
 import gi
 
 gi.require_version("Gtk", "3.0")
-from gi.repository import GLib, Gtk, Pango  # noqa: E402
+gi.require_version("Gdk", "3.0")
+from gi.repository import Gdk, GLib, Gtk, Pango  # noqa: E402
 
 APP_TITLE = "指紋マネージャー"
 USER = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
@@ -129,6 +131,9 @@ class FingerprintManager(Gtk.Window):
         out_frame = Gtk.Frame()
         out_frame.set_border_width(12)
         out_frame.add(out_scroll)
+        out_frame.set_no_show_all(True)
+        out_frame.hide()
+        self.out_frame = out_frame
         outer.pack_start(out_frame, False, False, 0)
 
         self.connect("destroy", self.on_destroy)
@@ -303,6 +308,8 @@ class FingerprintManager(Gtk.Window):
             return
         self.last_lines = []
         self._clear_output()
+        self.out_frame.set_no_show_all(False)
+        self.out_frame.show_all()
         self.status_label.set_text(f"{description} を開始しました…")
         self.add_button.set_sensitive(False)
         self.refresh_button.set_sensitive(False)
@@ -378,9 +385,34 @@ class FingerprintManager(Gtk.Window):
         dialog.destroy()
 
 
+def capture_window(win, path):
+    """デバッグ/ドキュメント用: 自分のウィンドウだけを PNG に保存して終了する。"""
+    def do_capture():
+        gdk_window = win.get_window()
+        if gdk_window is not None:
+            width = gdk_window.get_width()
+            height = gdk_window.get_height()
+            pixbuf = Gdk.pixbuf_get_from_window(gdk_window, 0, 0, width, height)
+            if pixbuf is not None:
+                parent = os.path.dirname(path)
+                if parent:
+                    os.makedirs(parent, exist_ok=True)
+                pixbuf.savev(path, "png", [], [])
+        Gtk.main_quit()
+        return False
+
+    GLib.timeout_add(1200, do_capture)
+
+
 if __name__ == "__main__":
     win = FingerprintManager()
     win.connect("delete-event", Gtk.main_quit)
     win.show_all()
     win.cancel_button.hide()
+
+    if "--screenshot" in sys.argv:
+        index = sys.argv.index("--screenshot")
+        if index + 1 < len(sys.argv):
+            capture_window(win, sys.argv[index + 1])
+
     Gtk.main()
