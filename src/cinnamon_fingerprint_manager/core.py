@@ -28,6 +28,11 @@ FINGERS: tuple[tuple[str, str], ...] = (
 
 FINGER_LABEL: dict[str, str] = dict(FINGERS)
 
+SCAN_TYPE_LABEL: dict[str, str] = {
+    "swipe": "スワイプ式",
+    "press": "押し当て式",
+}
+
 _FINGER_LINE = re.compile(r"^\s*-\s*#\d+:\s*(\S+)\s*$", re.MULTILINE)
 _DEVICE_LINE = re.compile(r"\bon (.+?)(?: \((.+?)\))?:\s*$", re.MULTILINE)
 _NO_FINGERS_LINE = re.compile(
@@ -78,7 +83,7 @@ def parse_list_output(text: str) -> ListResult:
 def device_title(device: str, scan_type: str | None = None) -> str:
     """Human readable device heading."""
     if scan_type:
-        return f"{device}（{scan_type} 式）"
+        return f"{device}（{SCAN_TYPE_LABEL.get(scan_type, scan_type)}）"
     return device
 
 

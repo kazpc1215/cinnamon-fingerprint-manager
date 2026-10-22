@@ -95,8 +95,14 @@ class TestSummarizeOutput:
 
 
 class TestLabels:
-    def test_device_title_with_scan_type(self):
-        assert device_title("AuthenTec AES2660", "swipe") == "AuthenTec AES2660（swipe 式）"
+    def test_device_title_with_swipe_scan_type(self):
+        assert device_title("AuthenTec AES2660", "swipe") == "AuthenTec AES2660（スワイプ式）"
+
+    def test_device_title_with_press_scan_type(self):
+        assert device_title("Sensor X", "press") == "Sensor X（押し当て式）"
+
+    def test_device_title_with_unknown_scan_type(self):
+        assert device_title("Sensor X", "optical") == "Sensor X（optical）"
 
     def test_device_title_without_scan_type(self):
         assert device_title("Generic Sensor") == "Generic Sensor"

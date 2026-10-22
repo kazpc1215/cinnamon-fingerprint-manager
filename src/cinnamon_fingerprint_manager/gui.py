@@ -80,18 +80,15 @@ class FingerprintManager(Gtk.Window):
         outer.pack_start(frame, True, True, 0)
 
         # --- ヒント ---
-        hint = Gtk.Label(xalign=0)
-        hint.set_markup(
-            "<small>追加・削除のときは、本人確認のためパスワードのダイアログが出ます。\n"
-            "このセンサーはスワイプ式です。指を端から端へ、一定方向にゆっくり動かしてください。</small>"
-        )
-        hint.set_line_wrap(True)
-        hint.get_style_context().add_class("dim-label")
-        hint.set_margin_start(12)
-        hint.set_margin_end(12)
-        hint.set_margin_top(4)
-        hint.set_margin_bottom(4)
-        outer.pack_start(hint, False, False, 0)
+        self.hint = Gtk.Label(xalign=0)
+        self.hint.set_line_wrap(True)
+        self.hint.get_style_context().add_class("dim-label")
+        self.hint.set_margin_start(12)
+        self.hint.set_margin_end(12)
+        self.hint.set_margin_top(4)
+        self.hint.set_margin_bottom(4)
+        self._set_hint(None)
+        outer.pack_start(self.hint, False, False, 0)
 
         # --- ボタン ---
         buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
@@ -144,6 +141,20 @@ class FingerprintManager(Gtk.Window):
     def _row_header(row, before):
         if before is not None:
             row.set_header(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
+
+    def _set_hint(self, scan_type):
+        if scan_type == "swipe":
+            instruction = (
+                "このセンサーはスワイプ式です。指を端から端へ、一定方向にゆっくり動かしてください。"
+            )
+        elif scan_type == "press":
+            instruction = "このセンサーは押し当て式です。センサーに指を軽く押し当ててください。"
+        else:
+            instruction = "センサーの読み取り方法に従って指を置いてください。"
+        self.hint.set_markup(
+            "<small>追加・削除のときは、本人確認のためパスワードのダイアログが出ます。\n"
+            f"{instruction}</small>"
+        )
 
     def refresh(self):
         """Start refreshing the device list without blocking the UI."""
@@ -223,6 +234,7 @@ class FingerprintManager(Gtk.Window):
 
         self.last_list = parsed
         self.add_button.set_sensitive(True)
+        self._set_hint(parsed.scan_type)
         self.device_label.set_text(device_title(parsed.device, parsed.scan_type))
         self.count_label.set_text(f"登録済み: {len(parsed.fingers)} 本")
 
@@ -247,6 +259,7 @@ class FingerprintManager(Gtk.Window):
     def _set_device_error(self, message):
         self.last_list = None
         self.add_button.set_sensitive(False)
+        self._set_hint(None)
         self.device_label.set_text(message)
         self.count_label.set_text("")
         for row in self.listbox.get_children():
