@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import os
 import subprocess
 import threading
 
@@ -28,6 +29,13 @@ from .core import (  # noqa: E402
 APP_TITLE = "指紋マネージャー"
 
 USER = current_user()
+
+
+def command_env() -> dict[str, str]:
+    """Environment for fprintd commands with stable English messages."""
+    env = {key: value for key, value in os.environ.items() if key != "LC_ALL"}
+    env["LC_MESSAGES"] = "C"
+    return env
 
 
 class FingerprintManager(Gtk.Window):
@@ -172,6 +180,9 @@ class FingerprintManager(Gtk.Window):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=command_env(),
             )
         except OSError as exc:
             self.refreshing = False
@@ -187,19 +198,24 @@ class FingerprintManager(Gtk.Window):
 
     def _list_reader(self, proc, generation):
         timed_out = False
+        output = ""
         try:
-            output, _ = proc.communicate(timeout=15)
-        except subprocess.TimeoutExpired:
-            timed_out = True
-            proc.kill()
-            output, _ = proc.communicate()
-        GLib.idle_add(
-            self._apply_list_result,
-            output or "",
-            proc.returncode,
-            timed_out,
-            generation,
-        )
+            try:
+                output, _ = proc.communicate(timeout=15)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                proc.kill()
+                output, _ = proc.communicate()
+        except (OSError, ValueError) as exc:
+            output = str(exc)
+        finally:
+            GLib.idle_add(
+                self._apply_list_result,
+                output or "",
+                proc.returncode,
+                timed_out,
+                generation,
+            )
 
     def _apply_list_result(self, output, returncode, timed_out, generation):
         if generation != self.list_generation:
@@ -420,6 +436,9 @@ class FingerprintManager(Gtk.Window):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=command_env(),
                 bufsize=1,
             )
         except OSError as exc:
@@ -429,10 +448,12 @@ class FingerprintManager(Gtk.Window):
         threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
 
     def _reader(self, proc):
-        for line in proc.stdout:
-            GLib.idle_add(self._append_line, line.rstrip("\n"))
-        returncode = proc.wait()
-        GLib.idle_add(self._finish, returncode, None)
+        try:
+            for line in proc.stdout:
+                GLib.idle_add(self._append_line, line.rstrip("\r\n"))
+        finally:
+            returncode = proc.wait()
+            GLib.idle_add(self._finish, returncode, None)
 
     def _append_line(self, line):
         self.last_lines.append(line)
