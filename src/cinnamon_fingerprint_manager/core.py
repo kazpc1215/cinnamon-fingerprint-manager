@@ -154,7 +154,26 @@ def classify_result(lines: list[str], returncode: int, action: str | None = None
     if "verify-match" in joined:
         return Result("verified", "照合に成功しました。")
     if "verify-retry-scan" in joined or "enroll-retry-scan" in joined:
-        return Result("retry", "読み取りが不十分でした。もう一度スワイプしてください。")
+        return Result("retry", "読み取りが不十分でした。もう一度指を置いてください。")
+    if "enroll-data-full" in joined:
+        return Result(
+            "data-full",
+            "登録できる指紋の上限に達しました。不要な指紋を削除してから登録してください。",
+        )
+    if "enroll-duplicate" in joined:
+        return Result("duplicate", "この指紋は既に登録されています。")
+    if "enroll-disconnected" in joined or "verify-disconnected" in joined:
+        return Result(
+            "disconnected",
+            "指紋センサーとの接続が切れました。接続を確認してから再試行してください。",
+        )
+    if "AlreadyInUse" in joined or "already claimed" in joined:
+        return Result(
+            "busy",
+            "指紋センサーは他のアプリで使用中です。他のアプリを閉じてから再試行してください。",
+        )
+    if "enroll-failed" in joined:
+        return Result("enroll-failed", "指紋の登録に失敗しました。もう一度お試しください。")
     if returncode != 0:
         return Result(
             "error",

@@ -146,6 +146,7 @@ class FingerprintManager(Gtk.Window):
         outer.pack_start(out_frame, False, False, 0)
 
         self.connect("destroy", self.on_destroy)
+        self.connect("delete-event", self.on_delete_event)
         self.refresh()
 
     # ---------- 一覧 ----------
@@ -407,9 +408,37 @@ class FingerprintManager(Gtk.Window):
                 proc.kill()
         return False
 
+    def on_delete_event(self, _widget, _event):
+        if not (self.proc and self.proc.poll() is None):
+            return False
+
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            modal=True,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.NONE,
+            text="処理を実行中です。中止して終了しますか？",
+        )
+        dialog.format_secondary_text("登録途中の場合、指紋が中途半端に登録される可能性があります。")
+        dialog.add_button("キャンセル", Gtk.ResponseType.CANCEL)
+        quit_button = dialog.add_button("中止して終了", Gtk.ResponseType.OK)
+        quit_button.get_style_context().add_class("destructive-action")
+        dialog.set_default_response(Gtk.ResponseType.CANCEL)
+        response = dialog.run()
+        dialog.destroy()
+
+        if response != Gtk.ResponseType.OK:
+            return True
+
+        self.cancelled = True
+        with contextlib.suppress(ProcessLookupError):
+            self.proc.terminate()
+        return False
+
     def on_destroy(self, _widget):
         if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
+            with contextlib.suppress(ProcessLookupError):
+                self.proc.kill()
 
     # ---------- コマンド実行 ----------
     def run_command(self, args, description, action=None):
@@ -462,7 +491,17 @@ class FingerprintManager(Gtk.Window):
         buffer = self.output.get_buffer()
         buffer.insert(buffer.get_end_iter(), line + "\n")
         self.output.scroll_to_iter(buffer.get_end_iter(), 0.0, False, 0.0, 0.0)
+        self._update_progress(line)
         return False
+
+    def _update_progress(self, line):
+        if "enroll-stage-passed" in line:
+            count = sum("enroll-stage-passed" in item for item in self.last_lines)
+            self.status_label.set_text(
+                f"読み取りました（{count}回目）。続けてもう一度指を置いてください。"
+            )
+        elif "enroll-retry-scan" in line or "verify-retry-scan" in line:
+            self.status_label.set_text("読み取りが不十分でした。もう一度指を置いてください。")
 
     def _finish(self, returncode, error):
         self.proc = None

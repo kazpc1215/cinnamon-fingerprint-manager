@@ -250,6 +250,28 @@ class TestClassifyResult:
         result = classify_result(["Verify result: verify-retry-scan"], 0)
         assert result.kind == "retry"
 
+    def test_data_full(self):
+        result = classify_result(["Enroll result: enroll-data-full"], 1)
+        assert result.kind == "data-full"
+
+    def test_duplicate(self):
+        result = classify_result(["Enroll result: enroll-duplicate"], 1)
+        assert result.kind == "duplicate"
+
+    def test_disconnected(self):
+        result = classify_result(["Verify result: verify-disconnected"], 1)
+        assert result.kind == "disconnected"
+
+    def test_device_already_in_use(self):
+        result = classify_result(
+            ["failed to claim device: net.reactivated.Fprint.Error.AlreadyInUse"], 1
+        )
+        assert result.kind == "busy"
+
+    def test_enroll_failed(self):
+        result = classify_result(["Enroll result: enroll-failed"], 1)
+        assert result.kind == "enroll-failed"
+
     def test_delete_success(self):
         assert classify_result([], 0, "delete") == Result("deleted", "削除しました。")
 
