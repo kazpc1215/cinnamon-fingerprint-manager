@@ -280,7 +280,7 @@ class FingerprintManager(Gtk.Window):
         verify = Gtk.Button(label="テスト")
         verify.connect(
             "clicked",
-            lambda *_: self.run_command(build_verify_command(finger), "照合テスト", "verify"),
+            lambda *_: self.run_command(build_verify_command(finger, USER), "照合テスト", "verify"),
         )
         delete = Gtk.Button(label="削除")
         delete.get_style_context().add_class("destructive-action")
@@ -328,7 +328,7 @@ class FingerprintManager(Gtk.Window):
         dialog.destroy()
         if response == Gtk.ResponseType.OK and finger:
             self.run_command(
-                build_enroll_command(finger),
+                build_enroll_command(finger, USER),
                 f"「{finger_label(finger)}」を登録",
                 "enroll",
             )

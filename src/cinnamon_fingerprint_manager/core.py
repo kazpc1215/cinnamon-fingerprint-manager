@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import getpass
 import os
+import pwd
 import re
 from typing import NamedTuple
 
@@ -103,19 +104,22 @@ def available_fingers(enrolled: list[str]) -> list[tuple[str, str]]:
 
 def current_user() -> str:
     """Current login name, with a fallback for minimal environments."""
-    return os.environ.get("USER") or os.environ.get("LOGNAME") or getpass.getuser()
+    try:
+        return pwd.getpwuid(os.geteuid()).pw_name
+    except KeyError:
+        return os.environ.get("USER") or os.environ.get("LOGNAME") or getpass.getuser()
 
 
 def build_list_command(user: str | None = None) -> list[str]:
     return ["fprintd-list", user or current_user()]
 
 
-def build_enroll_command(finger: str) -> list[str]:
-    return ["fprintd-enroll", "-f", finger]
+def build_enroll_command(finger: str, user: str | None = None) -> list[str]:
+    return ["fprintd-enroll", "-f", finger, user or current_user()]
 
 
-def build_verify_command(finger: str) -> list[str]:
-    return ["fprintd-verify", "-f", finger]
+def build_verify_command(finger: str, user: str | None = None) -> list[str]:
+    return ["fprintd-verify", "-f", finger, user or current_user()]
 
 
 def build_delete_command(finger: str, user: str | None = None) -> list[str]:

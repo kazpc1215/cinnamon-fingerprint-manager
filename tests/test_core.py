@@ -1,3 +1,8 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import cinnamon_fingerprint_manager.core as core
 from cinnamon_fingerprint_manager.core import (
     FINGER_LABEL,
     FINGERS,
@@ -125,21 +130,41 @@ class TestCommands:
         assert build_list_command("alice") == ["fprintd-list", "alice"]
 
     def test_list_command_uses_current_user(self, monkeypatch):
-        monkeypatch.setenv("USER", "bob")
+        monkeypatch.setattr(core, "current_user", lambda: "bob")
         assert build_list_command() == ["fprintd-list", "bob"]
 
     def test_enroll_command(self):
+        assert build_enroll_command("left-thumb", "alice") == [
+            "fprintd-enroll",
+            "-f",
+            "left-thumb",
+            "alice",
+        ]
+
+    def test_enroll_command_uses_current_user(self, monkeypatch):
+        monkeypatch.setattr(core, "current_user", lambda: "bob")
         assert build_enroll_command("left-thumb") == [
             "fprintd-enroll",
             "-f",
             "left-thumb",
+            "bob",
         ]
 
     def test_verify_command(self):
+        assert build_verify_command("left-thumb", "alice") == [
+            "fprintd-verify",
+            "-f",
+            "left-thumb",
+            "alice",
+        ]
+
+    def test_verify_command_uses_current_user(self, monkeypatch):
+        monkeypatch.setattr(core, "current_user", lambda: "bob")
         assert build_verify_command("left-thumb") == [
             "fprintd-verify",
             "-f",
             "left-thumb",
+            "bob",
         ]
 
     def test_delete_command(self):
@@ -150,9 +175,18 @@ class TestCommands:
             "left-thumb",
         ]
 
-    def test_current_user_reads_environment(self, monkeypatch):
-        monkeypatch.setenv("USER", "carol")
+    def test_current_user_uses_password_database(self, monkeypatch):
+        monkeypatch.setattr(core.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="carol"))
+        monkeypatch.setattr(core.os, "geteuid", lambda: 1000)
         assert current_user() == "carol"
+
+    def test_current_user_falls_back_to_environment(self, monkeypatch):
+        def missing_user(uid):
+            raise KeyError(uid)
+
+        monkeypatch.setattr(core.pwd, "getpwuid", missing_user)
+        monkeypatch.setenv("USER", "dave")
+        assert current_user() == "dave"
 
 
 class TestClassifyResult:
