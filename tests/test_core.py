@@ -12,6 +12,7 @@ from cinnamon_fingerprint_manager.core import (
     device_title,
     finger_label,
     parse_list_output,
+    summarize_output,
 )
 
 SAMPLE_LIST = """found 1 devices
@@ -78,6 +79,14 @@ class TestParseListOutput:
             "left-index-finger",
             "right-index-finger",
         ]
+
+
+class TestSummarizeOutput:
+    def test_returns_last_non_empty_line(self):
+        assert summarize_output("first\n\n  last  \n") == "last"
+
+    def test_returns_empty_string_for_blank_output(self):
+        assert summarize_output("\n \n") == ""
 
 
 class TestLabels:

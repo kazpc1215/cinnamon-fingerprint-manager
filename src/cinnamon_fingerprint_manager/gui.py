@@ -22,6 +22,7 @@ from .core import (  # noqa: E402
     device_title,
     finger_label,
     parse_list_output,
+    summarize_output,
 )
 
 APP_TITLE = "指紋マネージャー"
@@ -164,7 +165,11 @@ class FingerprintManager(Gtk.Window):
         except OSError as exc:
             self.refreshing = False
             self.refresh_button.set_sensitive(True)
-            self._set_device_error(f"fprintd-list を実行できません: {exc}")
+            self._set_device_error(
+                "fprintd-list を実行できません。"
+                "fprintd がインストールされているか確認してください。\n"
+                f"{exc}"
+            )
             return
 
         threading.Thread(target=self._list_reader, args=(proc, generation), daemon=True).start()
@@ -199,12 +204,21 @@ class FingerprintManager(Gtk.Window):
         self.refresh_button.set_sensitive(True)
 
         if timed_out:
-            self._set_device_error("一覧の取得がタイムアウトしました。")
+            self._set_device_error(
+                "一覧の取得がタイムアウトしました。fprintd の状態を確認してください。"
+            )
             return
 
         parsed = parse_list_output(output)
         if not parsed.found:
-            self._set_device_error("指紋センサーが見つかりません")
+            if returncode != 0:
+                detail = summarize_output(output)
+                message = "fprintd から一覧を取得できませんでした。"
+                if detail:
+                    message += f"\n{detail}"
+                self._set_device_error(message)
+            else:
+                self._set_device_error("指紋センサーが見つかりません")
             return
 
         self.last_list = parsed
@@ -239,6 +253,8 @@ class FingerprintManager(Gtk.Window):
             self.listbox.remove(row)
         row = Gtk.ListBoxRow()
         label = Gtk.Label(label=message)
+        label.set_line_wrap(True)
+        label.set_max_width_chars(60)
         label.set_margin_top(16)
         label.set_margin_bottom(16)
         row.add(label)
@@ -394,7 +410,7 @@ class FingerprintManager(Gtk.Window):
                 bufsize=1,
             )
         except OSError as exc:
-            self._finish(-1, str(exc))
+            self._finish(-1, f"fprintd を実行できません: {exc}")
             return
 
         threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()

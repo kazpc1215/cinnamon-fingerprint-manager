@@ -86,6 +86,15 @@ def finger_label(finger: str) -> str:
     return FINGER_LABEL.get(finger, finger)
 
 
+def summarize_output(text: str) -> str:
+    """Return the last non-empty line of command output."""
+    for line in reversed(text.splitlines()):
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
 def available_fingers(enrolled: list[str]) -> list[tuple[str, str]]:
     """Fingers that are not enrolled yet, in display order."""
     taken = set(enrolled)
