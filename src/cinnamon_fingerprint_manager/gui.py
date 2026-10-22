@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import subprocess
 import threading
 
@@ -35,6 +36,7 @@ class FingerprintManager(Gtk.Window):
         self.proc = None
         self.last_lines: list[str] = []
         self.current_action: str | None = None
+        self.cancelled = False
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
@@ -277,8 +279,22 @@ class FingerprintManager(Gtk.Window):
 
     def on_cancel_clicked(self, _button):
         if self.proc and self.proc.poll() is None:
-            self.proc.terminate()
-            self.status_label.set_text("中止しました。")
+            self.cancelled = True
+            self.status_label.set_text("中止しています…")
+            proc = self.proc
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                return
+            # fprintd が SIGTERM を無視した場合に備えて、少し待ってから強制終了する
+            GLib.timeout_add(2000, self._kill_if_running, proc)
+
+    @staticmethod
+    def _kill_if_running(proc):
+        if proc.poll() is None:
+            with contextlib.suppress(ProcessLookupError):
+                proc.kill()
+        return False
 
     def on_destroy(self, _widget):
         if self.proc and self.proc.poll() is None:
@@ -302,6 +318,7 @@ class FingerprintManager(Gtk.Window):
             return
         self.last_lines = []
         self.current_action = action
+        self.cancelled = False
         self._clear_output()
         self.out_frame.set_no_show_all(False)
         self.out_frame.show_all()
@@ -349,6 +366,11 @@ class FingerprintManager(Gtk.Window):
 
         if error:
             self.status_label.set_text(f"起動に失敗しました: {error}")
+            return
+
+        if self.cancelled:
+            self.cancelled = False
+            self.status_label.set_text("中止しました。")
             return
 
         result = classify_result(self.last_lines, returncode, self.current_action)
