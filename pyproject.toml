@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cinnamon-fingerprint-manager"
-version = "1.0.0"
+version = "1.1.0"
 description = "GTK3 GUI to enroll, verify and delete fingerprints with fprintd on Linux Mint / Cinnamon"
 readme = "README.md"
 requires-python = ">=3.10"
