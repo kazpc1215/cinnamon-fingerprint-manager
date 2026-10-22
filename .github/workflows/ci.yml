@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test:
-    name: Lint & test
+  lint:
+    name: Lint
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -27,28 +27,30 @@ jobs:
         run: uv run ruff check .
       - name: Ruff format
         run: uv run ruff format --check .
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        run: uv sync --frozen
       - name: Pytest
         run: uv run pytest -q
 
-  gui-import:
-    name: GTK import (real bindings)
+  gui:
+    name: GTK UI smoke
     runs-on: ubuntu-24.04
-    # apt のミラーが応答しない場合に備えてジョブ全体を打ち切る
-    timeout-minutes: 5
+    # apt のミラーが応答しない場合に備えて打ち切る
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - name: Install GTK bindings
+      - name: Install GTK and Xvfb
         run: |
-          set -euo pipefail
-          packages="python3-gi gir1.2-gtk-3.0"
-          # ランナー同梱のパッケージリストをまず使い、失敗したときだけ update する
-          if ! sudo timeout 120 apt-get install -y --no-install-recommends $packages; then
-            echo "同梱リストでは導入できなかったため apt-get update します"
-            sudo timeout 120 apt-get update \
-              -o Acquire::Retries=3 -o Acquire::http::Timeout=20
-            sudo timeout 120 apt-get install -y --no-install-recommends $packages
-          fi
-      - name: Import GUI module with real GTK
-        run: |
-          PYTHONPATH=src /usr/bin/python3 -c \
-            "import cinnamon_fingerprint_manager.gui as gui; print('GTK import OK:', gui.APP_TITLE)"
+          sudo apt-get update
+          sudo apt-get install -y python3-gi gir1.2-gtk-3.0 xvfb
+      - name: Build and draw the window
+        run: xvfb-run -a env PYTHONPATH=src /usr/bin/python3 tests/gui_smoke.py

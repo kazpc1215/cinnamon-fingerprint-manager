@@ -283,7 +283,8 @@ class FingerprintManager(Gtk.Window):
     def on_destroy(self, _widget):
         if self.proc and self.proc.poll() is None:
             self.proc.terminate()
-        Gtk.main_quit()
+        if Gtk.main_level() > 0:
+            Gtk.main_quit()
 
     # ---------- コマンド実行 ----------
     @staticmethod

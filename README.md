@@ -133,7 +133,13 @@ GUI はシステムの PyGObject を使うため、リポジトリから直接�
 PYTHONPATH=src python3 -m cinnamon_fingerprint_manager
 ```
 
-CI（GitHub Actions）では、`uv sync --frozen` → ruff → pytest に加えて、GTK バインディングを導入したシステム Python で GUI モジュールの import を検証します（apt のミラー停止に備え、ジョブは 5 分でタイムアウトします）。
+画面を実際に組み立てて描画するスモークテストは、Xvfb 上で実行できます。
+
+```bash
+xvfb-run -a env PYTHONPATH=src python3 tests/gui_smoke.py
+```
+
+CI（GitHub Actions）は **lint / test / GTK UI smoke** の 3 ジョブに分かれています。GTK UI smoke では Xvfb 上でウィンドウを生成し、ウィジェットの描画まで確認します。
 
 ## ライセンス
 
