@@ -32,6 +32,12 @@ SAMPLE_NO_DEVICE = """found 0 devices
 No devices available
 """
 
+SAMPLE_NO_FINGERS = """found 1 devices
+Device at /net/reactivated/Fprint/Device/0
+Using device /net/reactivated/Fprint/Device/0
+User nobody has no fingers enrolled for AuthenTec AES2660.
+"""
+
 
 class TestParseListOutput:
     def test_parses_device_scan_type_and_fingers(self):
@@ -57,6 +63,13 @@ class TestParseListOutput:
         text = "Fingerprints for user someone on Sensor X (press):\n"
         parsed = parse_list_output(text)
         assert parsed.device == "Sensor X"
+        assert parsed.fingers == []
+
+    def test_device_with_no_fingers_uses_real_fprintd_output(self):
+        parsed = parse_list_output(SAMPLE_NO_FINGERS)
+        assert parsed.found is True
+        assert parsed.device == "AuthenTec AES2660"
+        assert parsed.scan_type is None
         assert parsed.fingers == []
 
     def test_ignores_unrelated_lines(self):

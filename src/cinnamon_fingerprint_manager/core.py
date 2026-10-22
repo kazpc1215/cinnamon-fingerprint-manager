@@ -29,6 +29,10 @@ FINGER_LABEL: dict[str, str] = dict(FINGERS)
 
 _FINGER_LINE = re.compile(r"^\s*-\s*#\d+:\s*(\S+)\s*$", re.MULTILINE)
 _DEVICE_LINE = re.compile(r"\bon (.+?)(?: \((.+?)\))?:\s*$", re.MULTILINE)
+_NO_FINGERS_LINE = re.compile(
+    r"^\s*User\s+.+?\s+has no fingers enrolled(?: for (.+?))?\.\s*$",
+    re.MULTILINE,
+)
 
 
 class ListResult(NamedTuple):
@@ -53,10 +57,21 @@ class Result(NamedTuple):
 def parse_list_output(text: str) -> ListResult:
     """Extract the device name, scan type and enrolled fingers."""
     match = _DEVICE_LINE.search(text)
-    device = match.group(1).strip() if match else None
-    scan_type = match.group(2).strip() if match and match.group(2) else None
-    fingers = _FINGER_LINE.findall(text)
-    return ListResult(device, scan_type, fingers)
+    if match:
+        device = match.group(1).strip()
+        scan_type = match.group(2).strip() if match.group(2) else None
+        fingers = _FINGER_LINE.findall(text)
+        return ListResult(device, scan_type, fingers)
+
+    # fprintd prints a different line when the device exists but the user has
+    # not enrolled any finger yet:
+    #   User nobody has no fingers enrolled for AuthenTec AES2660.
+    no_fingers = _NO_FINGERS_LINE.search(text)
+    if no_fingers:
+        device = (no_fingers.group(1) or "").strip() or None
+        return ListResult(device, None, [])
+
+    return ListResult(None, None, [])
 
 
 def device_title(device: str, scan_type: str | None = None) -> str:
