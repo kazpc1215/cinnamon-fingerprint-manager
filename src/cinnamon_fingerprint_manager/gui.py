@@ -45,7 +45,7 @@ class FingerprintManager(Gtk.Window):
         if application is not None:
             self.set_application(application)
         self.set_default_size(560, 560)
-        self.set_icon_name("dialog-password")
+        self.set_icon_name("fingerprint-manager")
         self.proc = None
         self.last_lines: list[str] = []
         self.current_action: str | None = None
