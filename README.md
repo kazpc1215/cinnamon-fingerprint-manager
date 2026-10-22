@@ -1,5 +1,7 @@
 # 指紋マネージャー (Cinnamon Fingerprint Manager)
 
+[![CI](https://github.com/kazpc1215/cinnamon-fingerprint-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/kazpc1215/cinnamon-fingerprint-manager/actions/workflows/ci.yml)
+
 Linux Mint / Cinnamon には指紋認証の設定 GUI がありません。このアプリは、`fprintd` による指紋の**登録・照合テスト・削除**をデスクトップから行えるようにする小さな GTK3 フロントエンドです。
 
 追加のランタイム依存はなく、Linux Mint に標準で入っている Python 3 + GTK3 + fprintd だけで動作します。
@@ -45,8 +47,10 @@ cd cinnamon-fingerprint-manager
 
 `install.sh` は以下を行います。
 
-- `~/.local/share/fingerprint-manager/fingerprint_manager.py` に本体を配置
+- `~/.local/share/fingerprint-manager/cinnamon_fingerprint_manager/` にパッケージを配置
 - `~/.local/share/applications/fingerprint-manager.desktop` を作成（アプリメニューに登録）
+
+実行時はシステムの Python 3 と PyGObject を使います（uv や仮想環境は不要です）。
 
 デスクトップにもアイコンを置く場合:
 
@@ -101,11 +105,35 @@ sudo pam-auth-update --disable fprintd
 
 `fprintd` の CLI（`fprintd-list` / `fprintd-enroll` / `fprintd-verify` / `fprintd-delete`）を `subprocess` で呼び出し、出力を非同期に画面へ流しているだけです。独自のドライバや D-Bus 実装は持たず、`fprintd` の状態をそのまま反映します。
 
+コードは 2 つに分かれています。
+
+- `src/cinnamon_fingerprint_manager/core.py` — 出力の解析・コマンド組み立て・結果判定（GTK 非依存でテスト可能）
+- `src/cinnamon_fingerprint_manager/gui.py` — GTK3 の画面
+
 ## 既知の制限
 
 - 複数の指紋デバイスがある場合、`fprintd-list` が返す最初の 1 台のみを表示します
 - デバイス名や指の内部名は `fprintd` の出力（英語）を基にしています
 - 登録・削除には polkit エージェント（Cinnamon 標準のもの）が必要です
+
+## 開発
+
+パッケージ管理・lint・テストには [uv](https://docs.astral.sh/uv/) を使います（実行時には不要）。
+
+```bash
+uv sync                  # 開発用の仮想環境と依存を用意
+uv run ruff check .      # lint
+uv run ruff format .     # format（確認のみなら --check）
+uv run pytest -q         # 単体テスト
+```
+
+GUI はシステムの PyGObject を使うため、リポジトリから直接起動する場合はシステム Python で実行します。
+
+```bash
+PYTHONPATH=src python3 -m cinnamon_fingerprint_manager
+```
+
+CI（GitHub Actions）では、`uv sync --frozen` → ruff → pytest を実行し、加えて GTK を入れたシステム Python で GUI モジュールの import スモークテストを行います。
 
 ## ライセンス
 

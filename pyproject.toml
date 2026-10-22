@@ -1,0 +1,49 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cinnamon-fingerprint-manager"
+version = "1.0.0"
+description = "GTK3 GUI to enroll, verify and delete fingerprints with fprintd on Linux Mint / Cinnamon"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "kazpc1215" }]
+keywords = ["fingerprint", "fprintd", "gtk3", "cinnamon", "linux-mint"]
+classifiers = [
+    "Environment :: X11 Applications :: GTK",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Systems Administration",
+]
+
+[project.scripts]
+cinnamon-fingerprint-manager = "cinnamon_fingerprint_manager.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.9.0",
+]
+
+[tool.uv]
+package = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cinnamon_fingerprint_manager"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C4", "RUF"]
+# 日本語の全角括弧などは意図的なので許可する
+ignore = ["RUF001"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

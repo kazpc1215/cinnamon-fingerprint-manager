@@ -2,4 +2,10 @@ __pycache__/
 *.py[cod]
 *.pyo
 .venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+dist/
+build/
+*.egg-info/
 *.log

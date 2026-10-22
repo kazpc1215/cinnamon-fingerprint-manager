@@ -1,11 +1,7 @@
-#!/usr/bin/env python3
-"""指紋マネージャー — fprintd の登録・削除・テストを GUI で行う小さなフロントエンド。
+"""GTK3 front-end for fprintd."""
 
-依存: python3-gi / GTK3 / fprintd (いずれも Linux Mint に標準で入っているもの)
-"""
+from __future__ import annotations
 
-import os
-import re
 import subprocess
 import threading
 
@@ -14,31 +10,31 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import GLib, Gtk, Pango  # noqa: E402
 
-APP_TITLE = "指紋マネージャー"
-USER = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
+from .core import (  # noqa: E402
+    available_fingers,
+    build_delete_command,
+    build_enroll_command,
+    build_list_command,
+    build_verify_command,
+    classify_result,
+    current_user,
+    device_title,
+    finger_label,
+    parse_list_output,
+)
 
-FINGERS = [
-    ("right-thumb", "右手の親指"),
-    ("right-index-finger", "右手の人差し指"),
-    ("right-middle-finger", "右手中指"),
-    ("right-ring-finger", "右手薬指"),
-    ("right-little-finger", "右手小指"),
-    ("left-thumb", "左手の親指"),
-    ("left-index-finger", "左手の人差し指"),
-    ("left-middle-finger", "左手中指"),
-    ("left-ring-finger", "左手薬指"),
-    ("left-little-finger", "左手小指"),
-]
-FINGER_LABEL = dict(FINGERS)
+APP_TITLE = "指紋マネージャー"
+
+USER = current_user()
 
 
 class FingerprintManager(Gtk.Window):
     def __init__(self):
         super().__init__(title=APP_TITLE)
         self.set_default_size(560, 560)
-        self.set_border_width(0)
         self.proc = None
-        self.last_lines = []
+        self.last_lines: list[str] = []
+        self.current_action: str | None = None
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
@@ -146,44 +142,37 @@ class FingerprintManager(Gtk.Window):
     def refresh(self):
         try:
             result = subprocess.run(
-                ["fprintd-list", USER],
-                capture_output=True, text=True, timeout=15,
+                build_list_command(USER),
+                capture_output=True,
+                text=True,
+                timeout=15,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             self._set_device_error(str(exc))
             return
 
-        text = result.stdout + result.stderr
-        device = None
-        scan_type = None
-        m = re.search(r"on (.+?)(?: \((.+?)\))?:\s*$", text, re.MULTILINE)
-        if m:
-            device = m.group(1)
-            scan_type = m.group(2)
-
-        fingers = re.findall(r"^\s*-\s*#\d+:\s*(\S+)\s*$", text, re.MULTILINE)
+        parsed = parse_list_output(result.stdout + result.stderr)
 
         for row in self.listbox.get_children():
             self.listbox.remove(row)
 
-        if device:
-            label = device + (f"（{scan_type} 式）" if scan_type else "")
-            self.device_label.set_text(label)
-            self.count_label.set_text(f"登録済み: {len(fingers)} 本")
-        else:
+        if not parsed.found:
             self._set_device_error("指紋センサーが見つかりません")
             return
 
-        if not fingers:
+        self.device_label.set_text(device_title(parsed.device, parsed.scan_type))
+        self.count_label.set_text(f"登録済み: {len(parsed.fingers)} 本")
+
+        if not parsed.fingers:
             row = Gtk.ListBoxRow()
-            lbl = Gtk.Label(label="まだ指紋が登録されていません。「指を追加」から登録できます。")
-            lbl.set_margin_top(16)
-            lbl.set_margin_bottom(16)
-            lbl.get_style_context().add_class("dim-label")
-            row.add(lbl)
+            label = Gtk.Label(label="まだ指紋が登録されていません。「指を追加」から登録できます。")
+            label.set_margin_top(16)
+            label.set_margin_bottom(16)
+            label.get_style_context().add_class("dim-label")
+            row.add(label)
             self.listbox.add(row)
 
-        for name in fingers:
+        for name in parsed.fingers:
             self.listbox.add(self._make_row(name))
 
         self.listbox.show_all()
@@ -195,10 +184,10 @@ class FingerprintManager(Gtk.Window):
         for row in self.listbox.get_children():
             self.listbox.remove(row)
         row = Gtk.ListBoxRow()
-        lbl = Gtk.Label(label=message)
-        lbl.set_margin_top(16)
-        lbl.set_margin_bottom(16)
-        row.add(lbl)
+        label = Gtk.Label(label=message)
+        label.set_margin_top(16)
+        label.set_margin_bottom(16)
+        row.add(label)
         self.listbox.add(row)
         self.listbox.show_all()
 
@@ -211,16 +200,18 @@ class FingerprintManager(Gtk.Window):
         box.pack_start(icon, False, False, 0)
 
         text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
-        title = Gtk.Label(label=FINGER_LABEL.get(finger, finger), xalign=0)
-        sub = Gtk.Label(label=finger, xalign=0)
-        sub.get_style_context().add_class("dim-label")
+        title = Gtk.Label(label=finger_label(finger), xalign=0)
+        subtitle = Gtk.Label(label=finger, xalign=0)
+        subtitle.get_style_context().add_class("dim-label")
         text.pack_start(title, False, False, 0)
-        text.pack_start(sub, False, False, 0)
+        text.pack_start(subtitle, False, False, 0)
         box.pack_start(text, True, True, 0)
 
         verify = Gtk.Button(label="テスト")
-        verify.connect("clicked", lambda *_: self.run_command(
-            ["fprintd-verify", "-f", finger], "照合テスト"))
+        verify.connect(
+            "clicked",
+            lambda *_: self.run_command(build_verify_command(finger), "照合テスト", "verify"),
+        )
         delete = Gtk.Button(label="削除")
         delete.get_style_context().add_class("destructive-action")
         delete.connect("clicked", lambda *_: self.on_delete_clicked(finger, title.get_text()))
@@ -232,11 +223,8 @@ class FingerprintManager(Gtk.Window):
 
     # ---------- 操作 ----------
     def on_add_clicked(self, _button):
-        enrolled = {
-            m for m in re.findall(
-                r"^\s*-\s*#\d+:\s*(\S+)\s*$", self._get_list_text(), re.MULTILINE)
-        }
-        candidates = [(f, l) for f, l in FINGERS if f not in enrolled]
+        parsed = parse_list_output(self._get_list_text())
+        candidates = available_fingers(parsed.fingers)
         if not candidates:
             self._message("すべての指が登録済みです。", Gtk.MessageType.INFO)
             return
@@ -260,12 +248,15 @@ class FingerprintManager(Gtk.Window):
         dialog.destroy()
         if response == Gtk.ResponseType.OK and finger:
             self.run_command(
-                ["fprintd-enroll", "-f", finger],
-                f"「{FINGER_LABEL.get(finger, finger)}」を登録")
+                build_enroll_command(finger),
+                f"「{finger_label(finger)}」を登録",
+                "enroll",
+            )
 
     def on_delete_clicked(self, finger, label):
         dialog = Gtk.MessageDialog(
-            transient_for=self, modal=True,
+            transient_for=self,
+            modal=True,
             message_type=Gtk.MessageType.QUESTION,
             buttons=Gtk.ButtonsType.NONE,
             text=f"「{label}」の指紋を削除しますか？",
@@ -279,8 +270,10 @@ class FingerprintManager(Gtk.Window):
         dialog.destroy()
         if response == Gtk.ResponseType.OK:
             self.run_command(
-                ["fprintd-delete", USER, "-f", finger],
-                f"「{label}」を削除")
+                build_delete_command(finger, USER),
+                f"「{label}」を削除",
+                "delete",
+            )
 
     def on_cancel_clicked(self, _button):
         if self.proc and self.proc.poll() is None:
@@ -293,18 +286,21 @@ class FingerprintManager(Gtk.Window):
         Gtk.main_quit()
 
     # ---------- コマンド実行 ----------
-    def _get_list_text(self):
+    @staticmethod
+    def _get_list_text():
         try:
             result = subprocess.run(
-                ["fprintd-list", USER], capture_output=True, text=True, timeout=15)
+                build_list_command(USER), capture_output=True, text=True, timeout=15
+            )
             return result.stdout + result.stderr
         except (OSError, subprocess.TimeoutExpired):
             return ""
 
-    def run_command(self, args, description):
+    def run_command(self, args, description, action=None):
         if self.proc and self.proc.poll() is None:
             return
         self.last_lines = []
+        self.current_action = action
         self._clear_output()
         self.out_frame.set_no_show_all(False)
         self.out_frame.show_all()
@@ -318,72 +314,61 @@ class FingerprintManager(Gtk.Window):
 
         try:
             self.proc = subprocess.Popen(
-                args, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                text=True, bufsize=1,
+                args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
             )
         except OSError as exc:
             self._finish(-1, str(exc))
             return
 
-        threading.Thread(
-            target=self._reader, args=(self.proc,), daemon=True).start()
+        threading.Thread(target=self._reader, args=(self.proc,), daemon=True).start()
 
     def _reader(self, proc):
         for line in proc.stdout:
-            line = line.rstrip("\n")
-            GLib.idle_add(self._append_line, line)
-        rc = proc.wait()
-        GLib.idle_add(self._finish, rc, None)
+            GLib.idle_add(self._append_line, line.rstrip("\n"))
+        returncode = proc.wait()
+        GLib.idle_add(self._finish, returncode, None)
 
     def _append_line(self, line):
         self.last_lines.append(line)
-        buf = self.output.get_buffer()
-        buf.insert(buf.get_end_iter(), line + "\n")
-        self.output.scroll_to_iter(buf.get_end_iter(), 0.0, False, 0.0, 0.0)
+        buffer = self.output.get_buffer()
+        buffer.insert(buffer.get_end_iter(), line + "\n")
+        self.output.scroll_to_iter(buffer.get_end_iter(), 0.0, False, 0.0, 0.0)
         return False
 
-    def _finish(self, rc, error):
+    def _finish(self, returncode, error):
         self.proc = None
         self.cancel_button.hide()
         self.add_button.set_sensitive(True)
         self.refresh_button.set_sensitive(True)
         self.refresh()
 
-        joined = "\n".join(self.last_lines)
         if error:
             self.status_label.set_text(f"起動に失敗しました: {error}")
             return
-        if "Authorization denied" in joined or "Not Authorized" in joined:
-            self.status_label.set_text(
-                "認証が承認されなかったため操作を中止しました。"
-                "パスワードのダイアログで「認証」を選んでください。")
-        elif "enroll-completed" in joined:
-            self.status_label.set_text("登録が完了しました。")
-        elif "verify-match" in joined:
-            self.status_label.set_text("照合に成功しました。")
-        elif "verify-no-match" in joined:
-            self.status_label.set_text("照合に失敗しました（指紋が一致しません）。")
-        elif "verify-retry-scan" in joined or "enroll-retry-scan" in joined:
-            self.status_label.set_text("読み取りが不十分でした。もう一度スワイプしてください。")
-        elif "delete" in " ".join(self.last_lines).lower() and rc == 0:
-            self.status_label.set_text("削除しました。")
-        elif rc == 0:
-            self.status_label.set_text("完了しました。")
-        else:
-            self.status_label.set_text(f"コマンドが終了コード {rc} で失敗しました。下の出力を確認してください。")
+
+        result = classify_result(self.last_lines, returncode, self.current_action)
+        self.status_label.set_text(result.message)
 
     def _clear_output(self):
         self.output.get_buffer().set_text("")
 
     def _message(self, text, kind):
         dialog = Gtk.MessageDialog(
-            transient_for=self, modal=True, message_type=kind,
-            buttons=Gtk.ButtonsType.OK, text=text)
+            transient_for=self,
+            modal=True,
+            message_type=kind,
+            buttons=Gtk.ButtonsType.OK,
+            text=text,
+        )
         dialog.run()
         dialog.destroy()
 
 
-if __name__ == "__main__":
+def main():
     win = FingerprintManager()
     win.connect("delete-event", Gtk.main_quit)
     win.show_all()
