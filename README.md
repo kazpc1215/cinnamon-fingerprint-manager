@@ -133,7 +133,7 @@ GUI はシステムの PyGObject を使うため、リポジトリから直接�
 PYTHONPATH=src python3 -m cinnamon_fingerprint_manager
 ```
 
-CI（GitHub Actions）では、`uv sync --frozen` → ruff → pytest を実行します。GUI モジュールの import は `gi` をスタブしてテストするため、CI で GTK をインストールする必要はありません。
+CI（GitHub Actions）では、`uv sync --frozen` → ruff → pytest に加えて、GTK バインディングを導入したシステム Python で GUI モジュールの import を検証します（apt のミラー停止に備え、ジョブは 5 分でタイムアウトします）。
 
 ## ライセンス
 
