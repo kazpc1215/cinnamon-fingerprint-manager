@@ -37,6 +37,9 @@ class FingerprintManager(Gtk.Window):
         self.last_lines: list[str] = []
         self.current_action: str | None = None
         self.cancelled = False
+        self.refreshing = False
+        self.last_list = None
+        self.list_generation = 0
 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
@@ -142,28 +145,75 @@ class FingerprintManager(Gtk.Window):
             row.set_header(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL))
 
     def refresh(self):
-        try:
-            result = subprocess.run(
-                build_list_command(USER),
-                capture_output=True,
-                text=True,
-                timeout=15,
-            )
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            self._set_device_error(str(exc))
+        """Start refreshing the device list without blocking the UI."""
+        if self.refreshing or self.proc is not None:
             return
 
-        parsed = parse_list_output(result.stdout + result.stderr)
+        self.refreshing = True
+        self.refresh_button.set_sensitive(False)
+        self.add_button.set_sensitive(False)
+        self.list_generation += 1
+        generation = self.list_generation
+        try:
+            proc = subprocess.Popen(
+                build_list_command(USER),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
+        except OSError as exc:
+            self.refreshing = False
+            self.refresh_button.set_sensitive(True)
+            self._set_device_error(f"fprintd-list を実行できません: {exc}")
+            return
 
-        for row in self.listbox.get_children():
-            self.listbox.remove(row)
+        threading.Thread(target=self._list_reader, args=(proc, generation), daemon=True).start()
 
+    def _list_reader(self, proc, generation):
+        timed_out = False
+        try:
+            output, _ = proc.communicate(timeout=15)
+        except subprocess.TimeoutExpired:
+            timed_out = True
+            proc.kill()
+            output, _ = proc.communicate()
+        GLib.idle_add(
+            self._apply_list_result,
+            output or "",
+            proc.returncode,
+            timed_out,
+            generation,
+        )
+
+    def _apply_list_result(self, output, returncode, timed_out, generation):
+        if generation != self.list_generation:
+            return
+
+        # A command may have started while the list was being fetched; in that
+        # case let _finish() refresh again after the command completes.
+        if self.proc is not None:
+            self.refreshing = False
+            return
+
+        self.refreshing = False
+        self.refresh_button.set_sensitive(True)
+
+        if timed_out:
+            self._set_device_error("一覧の取得がタイムアウトしました。")
+            return
+
+        parsed = parse_list_output(output)
         if not parsed.found:
             self._set_device_error("指紋センサーが見つかりません")
             return
 
+        self.last_list = parsed
+        self.add_button.set_sensitive(True)
         self.device_label.set_text(device_title(parsed.device, parsed.scan_type))
         self.count_label.set_text(f"登録済み: {len(parsed.fingers)} 本")
+
+        for row in self.listbox.get_children():
+            self.listbox.remove(row)
 
         if not parsed.fingers:
             row = Gtk.ListBoxRow()
@@ -181,6 +231,8 @@ class FingerprintManager(Gtk.Window):
         self.cancel_button.hide()
 
     def _set_device_error(self, message):
+        self.last_list = None
+        self.add_button.set_sensitive(False)
         self.device_label.set_text(message)
         self.count_label.set_text("")
         for row in self.listbox.get_children():
@@ -225,8 +277,18 @@ class FingerprintManager(Gtk.Window):
 
     # ---------- 操作 ----------
     def on_add_clicked(self, _button):
-        parsed = parse_list_output(self._get_list_text())
-        candidates = available_fingers(parsed.fingers)
+        if self.last_list is None:
+            self._message(
+                "一覧を取得しています。少し待ってからもう一度お試しください。",
+                Gtk.MessageType.INFO,
+            )
+            self.refresh()
+            return
+        if not self.last_list.found:
+            self._message("指紋センサーが見つかりません。", Gtk.MessageType.ERROR)
+            return
+
+        candidates = available_fingers(self.last_list.fingers)
         if not candidates:
             self._message("すべての指が登録済みです。", Gtk.MessageType.INFO)
             return
@@ -303,22 +365,15 @@ class FingerprintManager(Gtk.Window):
             Gtk.main_quit()
 
     # ---------- コマンド実行 ----------
-    @staticmethod
-    def _get_list_text():
-        try:
-            result = subprocess.run(
-                build_list_command(USER), capture_output=True, text=True, timeout=15
-            )
-            return result.stdout + result.stderr
-        except (OSError, subprocess.TimeoutExpired):
-            return ""
-
     def run_command(self, args, description, action=None):
         if self.proc and self.proc.poll() is None:
             return
         self.last_lines = []
         self.current_action = action
         self.cancelled = False
+        # 進行中の一覧取得があれば無効化し、コマンド終了後に取り直す
+        self.list_generation += 1
+        self.refreshing = False
         self._clear_output()
         self.out_frame.set_no_show_all(False)
         self.out_frame.show_all()
